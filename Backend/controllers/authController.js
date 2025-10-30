@@ -4,8 +4,9 @@ const { sendVerificationEmail, sendPasswordResetEmail, sendAdminNotificationEmai
 const { saveVerificationDocument } = require("../utils/storageHelper")
  
 
-
 const register = async (req, res) => {
+  console.log("🟢 Starting registration...");
+
   try {
     const {
       email,
@@ -16,47 +17,79 @@ const register = async (req, res) => {
       phoneNumber,
       location,
       bio,
-    } = req.body
+    } = req.body;
+
+    console.log("📩 Incoming registration for:", email);
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email })
+    const existingUser = await User.findOne({ email });
+    console.log("✅ Checked existing user.");
+
     if (existingUser) {
+      console.warn("⚠️ User already exists:", email);
       return res.status(400).json({
         success: false,
-        message: 'User with this email already exists',
-      })
+        message: "User with this email already exists",
+      });
     }
 
     // Check for required files
     if (!req.files?.livePhoto || !req.files?.nationalId) {
+      console.warn("⚠️ Missing files for:", email);
       return res.status(400).json({
         success: false,
-        message: 'Live photo and national ID are required for registration',
-      })
+        message: "Live photo and national ID are required for registration",
+      });
     }
 
-    // Sanitize email to use as folder name
-    const sanitizedEmail = email.replace(/[^a-zA-Z0-9]/g, '_')
+    // Sanitize email for folder naming
+    const sanitizedEmail = email.replace(/[^a-zA-Z0-9]/g, "_");
+    console.log("📁 Sanitized email:", sanitizedEmail);
 
     // Upload Live Photo
-    const livePhotoResult = await saveVerificationDocument(
-      req.files.livePhoto[0].buffer,
-      sanitizedEmail,
-      'live_photo',
-      req.files.livePhoto[0].originalname
-    )
+    let livePhotoResult;
+    try {
+      console.log("⬆️ Uploading live photo...");
+      livePhotoResult = await saveVerificationDocument(
+        req.files.livePhoto[0].buffer,
+        sanitizedEmail,
+        "live_photo",
+        req.files.livePhoto[0].originalname
+      );
+      console.log("✅ Live photo uploaded:", livePhotoResult.url);
+    } catch (err) {
+      console.error("❌ Live photo upload failed:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload live photo",
+        error: err.message,
+      });
+    }
 
     // Upload National ID
-    const nationalIdResult = await saveVerificationDocument(
-      req.files.nationalId[0].buffer,
-      sanitizedEmail,
-      'national_id',
-      req.files.nationalId[0].originalname
-    )
+    let nationalIdResult;
+    try {
+      console.log("⬆️ Uploading national ID...");
+      nationalIdResult = await saveVerificationDocument(
+        req.files.nationalId[0].buffer,
+        sanitizedEmail,
+        "national_id",
+        req.files.nationalId[0].originalname
+      );
+      console.log("✅ National ID uploaded:", nationalIdResult.url);
+    } catch (err) {
+      console.error("❌ National ID upload failed:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload national ID",
+        error: err.message,
+      });
+    }
 
     // Generate email verification code
-    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString()
-    const emailVerificationExpires = new Date(Date.now() + 5 * 60 * 1000)
+    const verificationCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const emailVerificationExpires = new Date(Date.now() + 5 * 60 * 1000);
+    console.log("🔐 Generated verification code:", verificationCode);
 
     // Create new user
     const user = new User({
@@ -78,24 +111,49 @@ const register = async (req, res) => {
       },
       verificationCode,
       emailVerificationExpires,
-    })
+    });
 
-    await user.save()
+    try {
+      await user.save();
+      console.log("💾 User saved to database:", user._id);
+    } catch (err) {
+      console.error("❌ Error saving user:", err.message);
+      return res.status(500).json({
+        success: false,
+        message: "Database save failed",
+        error: err.message,
+      });
+    }
 
-    // Send email to user
-    await sendVerificationEmail(email, firstName, verificationCode)
+    // Send verification email
+    try {
+      console.log("📧 Sending verification email...");
+      await sendVerificationEmail(email, firstName, verificationCode);
+      console.log("✅ Verification email sent to:", email);
+    } catch (err) {
+      console.error("❌ Email sending failed:", err.message);
+      // Continue anyway (user still registered)
+    }
 
-    // Notify admin
-    await sendAdminNotificationEmail(
-      'tommr2323@gmail.com',
-      'New User Registration Pending Verification',
-      'A new user has registered and is pending admin verification.',
-      user
-    )
+    // Notify admin (non-blocking)
+    try {
+      console.log("📨 Sending admin notification...");
+      await sendAdminNotificationEmail(
+        "tommr2323@gmail.com",
+        "New User Registration Pending Verification",
+        "A new user has registered and is pending admin verification.",
+        user
+      );
+      console.log("✅ Admin notified.");
+    } catch (err) {
+      console.warn("⚠️ Admin email failed:", err.message);
+    }
 
+    // Success response
+    console.log("🎉 Registration complete for:", email);
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: "Registration successful! Please check your email to verify your account.",
       data: {
         userId: user._id,
         email: user.email,
@@ -103,16 +161,16 @@ const register = async (req, res) => {
         adminVerificationPending: true,
         verificationCode,
       },
-    })
+    });
   } catch (error) {
-    console.error('Registration error:', error)
+    console.error("🔥 Registration error (outer catch):", error);
     res.status(500).json({
       success: false,
-      message: 'Registration failed',
+      message: "Registration failed",
       error: error.message,
-    })
+    });
   }
-}
+};
 
  
 
