@@ -120,7 +120,7 @@ app.use("*", (req, res) => {
 
 // ===== MongoDB Connection =====
 mongoose
-  .connect( "mongodb+srv://tom:1234tom2394@wisdomwalk.db2qsqm.mongodb.net/?retryWrites=true&w=majority&appName=wisdomwalk" , {
+  .connect( "mongodb+srv://tom:tomtech@wisdomwalk.db2qsqm.mongodb.net/?appName=wisdomwalk" , {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
